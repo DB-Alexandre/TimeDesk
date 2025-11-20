@@ -23,14 +23,22 @@ class StatsCalculator
     /**
      * Calcule les statistiques pour une période
      */
-    public function getStats(string $dateFrom, string $dateTo): array
+    public function getStats(string $dateFrom, string $dateTo, ?int $userId = null): array
     {
-        $stmt = $this->db->prepare('
+        $where = 'date BETWEEN ? AND ?';
+        $params = [$dateFrom, $dateTo];
+        
+        if ($userId !== null) {
+            $where .= ' AND user_id = ?';
+            $params[] = $userId;
+        }
+        
+        $stmt = $this->db->prepare("
             SELECT date, start_time, end_time, type 
             FROM entries 
-            WHERE date BETWEEN ? AND ?
-        ');
-        $stmt->execute([$dateFrom, $dateTo]);
+            WHERE {$where}
+        ");
+        $stmt->execute($params);
 
         $totalWork = 0;
         $totalBreak = 0;
@@ -58,10 +66,10 @@ class StatsCalculator
     /**
      * Statistiques journalières
      */
-    public function getDailyStats(DateTimeImmutable $date): array
+    public function getDailyStats(DateTimeImmutable $date, ?int $userId = null): array
     {
         $dateStr = $date->format('Y-m-d');
-        $stats = $this->getStats($dateStr, $dateStr);
+        $stats = $this->getStats($dateStr, $dateStr, $userId);
         $targetMinutes = (int)round(CONTRACT_WEEKLY_HOURS * 60 / 5);
         
         return $this->enrichStats($stats, $targetMinutes);
@@ -70,11 +78,11 @@ class StatsCalculator
     /**
      * Statistiques hebdomadaires
      */
-    public function getWeeklyStats(DateTimeImmutable $today): array
+    public function getWeeklyStats(DateTimeImmutable $today, ?int $userId = null): array
     {
         $weekStart = TimeHelper::getWeekStart($today);
         $weekEnd = TimeHelper::getWeekEnd($today);
-        $stats = $this->getStats($weekStart->format('Y-m-d'), $weekEnd->format('Y-m-d'));
+        $stats = $this->getStats($weekStart->format('Y-m-d'), $weekEnd->format('Y-m-d'), $userId);
         $targetMinutes = (int)round(CONTRACT_WEEKLY_HOURS * 60);
         
         return array_merge(
@@ -89,11 +97,11 @@ class StatsCalculator
     /**
      * Statistiques mensuelles
      */
-    public function getMonthlyStats(DateTimeImmutable $today): array
+    public function getMonthlyStats(DateTimeImmutable $today, ?int $userId = null): array
     {
         $monthStart = TimeHelper::getMonthStart($today);
         $monthEnd = TimeHelper::getMonthEnd($today);
-        $stats = $this->getStats($monthStart->format('Y-m-d'), $monthEnd->format('Y-m-d'));
+        $stats = $this->getStats($monthStart->format('Y-m-d'), $monthEnd->format('Y-m-d'), $userId);
         $targetMinutes = (int)round(MONTHLY_TARGET_HOURS * 60);
         
         return array_merge(
@@ -108,11 +116,11 @@ class StatsCalculator
     /**
      * Statistiques annuelles
      */
-    public function getYearlyStats(DateTimeImmutable $today): array
+    public function getYearlyStats(DateTimeImmutable $today, ?int $userId = null): array
     {
         $yearStart = new DateTimeImmutable($today->format('Y-01-01'));
         $yearEnd = new DateTimeImmutable($today->format('Y-12-31'));
-        $stats = $this->getStats($yearStart->format('Y-m-d'), $yearEnd->format('Y-m-d'));
+        $stats = $this->getStats($yearStart->format('Y-m-d'), $yearEnd->format('Y-m-d'), $userId);
         $targetMinutes = (int)round(MONTHLY_TARGET_HOURS * 12 * 60);
         
         return array_merge(
@@ -144,18 +152,18 @@ class StatsCalculator
     /**
      * Récupère le temps travaillé par jour sur une période
      */
-    public function getWorkByDay(string $dateFrom, string $dateTo): array
+    public function getWorkByDay(string $dateFrom, string $dateTo, ?int $userId = null): array
     {
-        $stats = $this->getStats($dateFrom, $dateTo);
+        $stats = $this->getStats($dateFrom, $dateTo, $userId);
         return $stats['by_day'];
     }
 
     /**
      * Calcule la moyenne journalière sur une période
      */
-    public function getDailyAverage(string $dateFrom, string $dateTo): float
+    public function getDailyAverage(string $dateFrom, string $dateTo, ?int $userId = null): float
     {
-        $stats = $this->getStats($dateFrom, $dateTo);
+        $stats = $this->getStats($dateFrom, $dateTo, $userId);
         $days = count($stats['by_day']);
         
         return $days > 0 ? $stats['net_minutes'] / $days : 0;

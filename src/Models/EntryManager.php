@@ -28,15 +28,16 @@ class EntryManager
     public function create(array $data): bool
     {
         $this->validateEntryData($data);
-        $this->checkDailyLimit($data['date']);
+        $this->checkDailyLimit($data['date'], $data['user_id'] ?? null);
 
         $now = (new DateTimeImmutable())->format('c');
         $stmt = $this->db->prepare('
-            INSERT INTO entries (date, start_time, end_time, type, description, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO entries (user_id, date, start_time, end_time, type, description, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ');
 
         return $stmt->execute([
+            $data['user_id'] ?? null,
             $data['date'],
             $data['start_time'],
             $data['end_time'],
@@ -84,10 +85,15 @@ class EntryManager
     /**
      * Récupère toutes les entrées avec filtres optionnels
      */
-    public function getAll(?string $dateFrom = null, ?string $dateTo = null): array
+    public function getAll(?string $dateFrom = null, ?string $dateTo = null, ?int $userId = null): array
     {
         $where = [];
         $params = [];
+
+        if ($userId !== null) {
+            $where[] = 'user_id = ?';
+            $params[] = $userId;
+        }
 
         if ($dateFrom && Validator::date($dateFrom)) {
             $where[] = 'date >= ?';
@@ -123,22 +129,39 @@ class EntryManager
     }
 
     /**
+     * Vérifie si une entrée appartient à un utilisateur
+     */
+    public function belongsToUser(int $entryId, int $userId): bool
+    {
+        $entry = $this->findById($entryId);
+        return $entry && (int)$entry['user_id'] === $userId;
+    }
+
+    /**
      * Récupère la dernière heure de fin pour une date
      */
-    public function getLastEndTime(string $date): ?string
+    public function getLastEndTime(string $date, ?int $userId = null): ?string
     {
         if (!Validator::date($date)) {
             return null;
         }
 
-        $stmt = $this->db->prepare('
+        $where = 'date = ?';
+        $params = [$date];
+
+        if ($userId !== null) {
+            $where .= ' AND user_id = ?';
+            $params[] = $userId;
+        }
+
+        $stmt = $this->db->prepare("
             SELECT end_time 
             FROM entries 
-            WHERE date = ? 
+            WHERE {$where}
             ORDER BY end_time DESC 
             LIMIT 1
-        ');
-        $stmt->execute([$date]);
+        ");
+        $stmt->execute($params);
         $result = $stmt->fetch();
 
         return $result['end_time'] ?? null;
@@ -173,10 +196,18 @@ class EntryManager
     /**
      * Vérifie la limite quotidienne d'entrées
      */
-    private function checkDailyLimit(string $date): void
+    private function checkDailyLimit(string $date, ?int $userId = null): void
     {
-        $stmt = $this->db->prepare('SELECT COUNT(*) as count FROM entries WHERE date = ?');
-        $stmt->execute([$date]);
+        $where = 'date = ?';
+        $params = [$date];
+
+        if ($userId !== null) {
+            $where .= ' AND user_id = ?';
+            $params[] = $userId;
+        }
+
+        $stmt = $this->db->prepare("SELECT COUNT(*) as count FROM entries WHERE {$where}");
+        $stmt->execute($params);
         $result = $stmt->fetch();
 
         if ($result['count'] >= MAX_ENTRIES_PER_DAY) {
@@ -187,9 +218,14 @@ class EntryManager
     /**
      * Compte le nombre total d'entrées
      */
-    public function count(): int
+    public function count(?int $userId = null): int
     {
-        $stmt = $this->db->query('SELECT COUNT(*) as count FROM entries');
+        if ($userId !== null) {
+            $stmt = $this->db->prepare('SELECT COUNT(*) as count FROM entries WHERE user_id = ?');
+            $stmt->execute([$userId]);
+        } else {
+            $stmt = $this->db->query('SELECT COUNT(*) as count FROM entries');
+        }
         $result = $stmt->fetch();
         return (int)$result['count'];
     }

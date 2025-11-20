@@ -15,7 +15,15 @@ use Helpers\Auth;
                 <?php if (Auth::isAuthenticated()): ?>
                     <span class="text-secondary small">
                         <?= Validator::escape(Auth::getUsername()) ?>
+                        <?php if (Auth::isAdmin()): ?>
+                            <span class="badge bg-primary ms-1">Admin</span>
+                        <?php endif; ?>
                     </span>
+                <?php endif; ?>
+                <?php if (Auth::isAdmin()): ?>
+                    <a href="?action=users" class="btn btn-sm btn-outline-primary">
+                        👥 Utilisateurs
+                    </a>
                 <?php endif; ?>
                 <button class="btn btn-sm btn-outline-secondary" id="toggleTheme" type="button">
                     🌙/☀️

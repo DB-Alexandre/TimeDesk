@@ -10,6 +10,7 @@ namespace Controllers;
 use Models\Database;
 use Models\EntryManager;
 use Helpers\Auth;
+use Helpers\Logger;
 
 class ApiController
 {
@@ -31,7 +32,8 @@ class ApiController
         header('Content-Type: application/json; charset=utf-8');
         
         $date = $_GET['date'] ?? '';
-        $lastEnd = $this->entryManager->getLastEndTime($date);
+        $userId = Auth::isAdmin() ? null : Auth::getUserId();
+        $lastEnd = $this->entryManager->getLastEndTime($date, $userId);
         
         echo json_encode([
             'lastEnd' => $lastEnd
@@ -47,7 +49,10 @@ class ApiController
     {
         Auth::check();
 
-        $entries = $this->entryManager->getAll();
+        $userId = Auth::isAdmin() ? null : Auth::getUserId();
+        $entries = $this->entryManager->getAll(null, null, $userId);
+        
+        Logger::userAction('csv_export', Auth::getUserId());
         
         header('Content-Type: text/csv; charset=utf-8');
         header('Content-Disposition: attachment; filename="timedesk_export_' . date('Y-m-d') . '.csv"');

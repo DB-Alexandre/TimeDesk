@@ -15,6 +15,8 @@ use Core\Router;
 use Controllers\EntryController;
 use Controllers\ApiController;
 use Controllers\AuthController;
+use Controllers\UserController;
+use Helpers\Logger;
 
 // Démarrage de la session
 Session::start();
@@ -54,6 +56,42 @@ try {
         exit;
     }
 
+    // Routes de gestion des utilisateurs (admin uniquement)
+    if (in_array($action, ['users', 'user-create', 'user-edit', 'user-delete', 'user-stats'])) {
+        $userController = new UserController();
+        
+        switch ($action) {
+            case 'users':
+                $userController->index();
+                break;
+                
+            case 'user-create':
+                if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+                    $userController->create();
+                } else {
+                    $userController->createForm();
+                }
+                break;
+                
+            case 'user-edit':
+                if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+                    $userController->update();
+                } else {
+                    $userController->editForm();
+                }
+                break;
+                
+            case 'user-delete':
+                $userController->delete();
+                break;
+                
+            case 'user-stats':
+                $userController->userStats();
+                break;
+        }
+        exit;
+    }
+
     // Routes des entrées
     $entryController = new EntryController();
 
@@ -77,6 +115,14 @@ try {
     }
 
 } catch (Throwable $e) {
+    // Log de l'erreur
+    Logger::error('Application error', [
+        'message' => $e->getMessage(),
+        'file' => $e->getFile(),
+        'line' => $e->getLine(),
+        'trace' => $e->getTraceAsString(),
+    ]);
+    
     // Gestion des erreurs
     if (DEBUG) {
         echo '<pre>';

@@ -8,6 +8,7 @@ declare(strict_types=1);
 namespace Controllers;
 
 use Helpers\Auth;
+use Helpers\Logger;
 use Core\Session;
 use Core\Router;
 
@@ -47,6 +48,10 @@ class AuthController
             exit;
         } else {
             Session::set('login_error', 'Identifiants incorrects');
+            Logger::warning('Failed login attempt', [
+                'username' => $username,
+                'ip' => $_SERVER['REMOTE_ADDR'] ?? 'unknown',
+            ]);
             header('Location: ' . $_SERVER['SCRIPT_NAME'] . '?action=login');
             exit;
         }

@@ -57,6 +57,14 @@ class Validator
     }
 
     /**
+     * Récupère le token CSRF
+     */
+    public static function csrfToken(): string
+    {
+        return Session::getCsrfToken();
+    }
+
+    /**
      * Échappe une chaîne HTML
      */
     public static function escape(?string $string): string
