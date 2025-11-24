@@ -83,35 +83,80 @@ class EntryManager
     }
 
     /**
-     * Récupère toutes les entrées avec filtres optionnels
+     * Récupère toutes les entrées (legacy)
      */
     public function getAll(?string $dateFrom = null, ?string $dateTo = null, ?int $userId = null): array
     {
-        $where = [];
-        $params = [];
-
-        if ($userId !== null) {
-            $where[] = 'user_id = ?';
-            $params[] = $userId;
-        }
+        $filters = [];
 
         if ($dateFrom && Validator::date($dateFrom)) {
-            $where[] = 'date >= ?';
-            $params[] = $dateFrom;
+            $filters['from'] = $dateFrom;
         }
 
         if ($dateTo && Validator::date($dateTo)) {
-            $where[] = 'date <= ?';
-            $params[] = $dateTo;
+            $filters['to'] = $dateTo;
         }
 
-        $whereSql = $where ? 'WHERE ' . implode(' AND ', $where) : '';
-        $stmt = $this->db->prepare("
-            SELECT * FROM entries 
-            $whereSql 
-            ORDER BY date DESC, start_time DESC, id DESC
-        ");
-        $stmt->execute($params);
+        if ($userId !== null) {
+            $filters['user_id'] = $userId;
+        }
+
+        return $this->export($filters);
+    }
+
+    /**
+     * Recherche paginée avec filtres
+     */
+    public function search(array $filters, int $limit = 25, int $page = 1): array
+    {
+        $limit = max(10, min(100, $limit));
+        $page = max(1, $page);
+        $offset = ($page - 1) * $limit;
+
+        [$whereSql, $params] = $this->buildWhereClause($filters);
+
+        $countStmt = $this->db->prepare("SELECT COUNT(*) FROM entries e $whereSql");
+        $this->bindFilterParams($countStmt, $params);
+        $countStmt->execute();
+        $total = (int)$countStmt->fetchColumn();
+
+        $sql = "
+            SELECT e.*, u.username 
+            FROM entries e
+            LEFT JOIN users u ON u.id = e.user_id
+            $whereSql
+            ORDER BY e.date DESC, e.start_time DESC, e.id DESC
+            LIMIT :limit OFFSET :offset
+        ";
+
+        $stmt = $this->db->prepare($sql);
+        $this->bindFilterParams($stmt, $params);
+        $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+        $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+        $stmt->execute();
+
+        return [
+            'entries' => $stmt->fetchAll(),
+            'total' => $total,
+        ];
+    }
+
+    /**
+     * Exporte toutes les entrées correspondant aux filtres
+     */
+    public function export(array $filters): array
+    {
+        [$whereSql, $params] = $this->buildWhereClause($filters);
+        $sql = "
+            SELECT e.*, u.username 
+            FROM entries e
+            LEFT JOIN users u ON u.id = e.user_id
+            $whereSql
+            ORDER BY e.date DESC, e.start_time DESC, e.id DESC
+        ";
+        $stmt = $this->db->prepare($sql);
+        $this->bindFilterParams($stmt, $params);
+        $stmt->execute();
 
         return $stmt->fetchAll();
     }
@@ -228,5 +273,54 @@ class EntryManager
         }
         $result = $stmt->fetch();
         return (int)$result['count'];
+    }
+
+    /**
+     * Construit la clause WHERE en fonction des filtres
+     */
+    private function buildWhereClause(array $filters): array
+    {
+        $where = [];
+        $params = [];
+
+        if (!empty($filters['user_id'])) {
+            $where[] = 'e.user_id = :user_id';
+            $params['user_id'] = (int)$filters['user_id'];
+        }
+
+        if (!empty($filters['from']) && Validator::date($filters['from'])) {
+            $where[] = 'e.date >= :from';
+            $params['from'] = $filters['from'];
+        }
+
+        if (!empty($filters['to']) && Validator::date($filters['to'])) {
+            $where[] = 'e.date <= :to';
+            $params['to'] = $filters['to'];
+        }
+
+        if (!empty($filters['type']) && Validator::type($filters['type'])) {
+            $where[] = 'e.type = :type';
+            $params['type'] = $filters['type'];
+        }
+
+        if (!empty($filters['search'])) {
+            $where[] = '(e.description LIKE :search)';
+            $params['search'] = '%' . $filters['search'] . '%';
+        }
+
+        $whereSql = $where ? 'WHERE ' . implode(' AND ', $where) : '';
+
+        return [$whereSql, $params];
+    }
+
+    /**
+     * Lie les paramètres nommés à une requête
+     */
+    private function bindFilterParams(\PDOStatement $stmt, array $params): void
+    {
+        foreach ($params as $key => $value) {
+            $type = is_int($value) ? PDO::PARAM_INT : PDO::PARAM_STR;
+            $stmt->bindValue(':' . $key, $value, $type);
+        }
     }
 }

@@ -20,12 +20,18 @@ use Helpers\Auth;
                         <?php endif; ?>
                     </span>
                 <?php endif; ?>
+                <a href="?action=calendar" class="btn btn-sm btn-outline-light">
+                    📅 Calendrier
+                </a>
                 <?php if (Auth::isAdmin()): ?>
                     <a href="?action=users" class="btn btn-sm btn-outline-primary">
                         👥 Utilisateurs
                     </a>
                     <a href="?action=admin-db" class="btn btn-sm btn-outline-warning">
                         🗄️ Base
+                    </a>
+                    <a href="?action=audit-log" class="btn btn-sm btn-outline-info">
+                        🔐 Audit
                     </a>
                 <?php endif; ?>
                 <button class="btn btn-sm btn-outline-secondary" id="toggleTheme" type="button">

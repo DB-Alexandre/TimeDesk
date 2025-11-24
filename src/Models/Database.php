@@ -7,11 +7,14 @@ declare(strict_types=1);
 
 namespace Models;
 
+use Core\Migrator;
 use PDO;
+use RuntimeException;
 
 class Database
 {
     private static ?PDO $instance = null;
+    private static bool $migrated = false;
 
     /**
      * Récupère l'instance PDO (Singleton)
@@ -19,9 +22,7 @@ class Database
     public static function getInstance(): PDO
     {
         if (self::$instance === null) {
-            self::$instance = new PDO('sqlite:' . DB_FILE);
-            self::$instance->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-            self::$instance->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+            self::$instance = self::createConnection();
             self::initSchema();
         }
         
@@ -33,73 +34,13 @@ class Database
      */
     private static function initSchema(): void
     {
-        // Table des utilisateurs
-        self::$instance->exec('
-            CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT NOT NULL UNIQUE,
-                email TEXT,
-                password_hash TEXT NOT NULL,
-                role TEXT NOT NULL DEFAULT "user" CHECK(role IN ("admin", "user")),
-                is_active INTEGER NOT NULL DEFAULT 1,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL,
-                last_login TEXT
-            );
-            
-            CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
-            CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
-        ');
-
-        // Migration : Ajouter user_id à entries si elle n'existe pas
-        try {
-            $result = self::$instance->query("PRAGMA table_info(entries)");
-            $columns = $result->fetchAll(PDO::FETCH_COLUMN);
-            
-            if (!in_array('user_id', $columns)) {
-                self::$instance->exec('
-                    ALTER TABLE entries ADD COLUMN user_id INTEGER;
-                    CREATE INDEX IF NOT EXISTS idx_entries_user_id ON entries(user_id);
-                ');
-            }
-        } catch (\Exception $e) {
-            // Ignorer si la colonne existe déjà
+        if (self::$migrated) {
+            return;
         }
 
-        // Table des entrées
-        self::$instance->exec('
-            CREATE TABLE IF NOT EXISTS entries (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER,
-                date TEXT NOT NULL,
-                start_time TEXT NOT NULL,
-                end_time TEXT NOT NULL,
-                type TEXT NOT NULL CHECK(type IN ("work","break")),
-                description TEXT DEFAULT "",
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL,
-                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-                UNIQUE(user_id, date, start_time, end_time, type) ON CONFLICT IGNORE
-            );
-            
-            CREATE INDEX IF NOT EXISTS idx_entries_date ON entries(date);
-            CREATE INDEX IF NOT EXISTS idx_entries_type ON entries(type);
-            CREATE INDEX IF NOT EXISTS idx_entries_datetime ON entries(date, start_time);
-            CREATE INDEX IF NOT EXISTS idx_entries_user_id ON entries(user_id);
-        ');
-
-        // Créer un utilisateur admin par défaut si aucun utilisateur n'existe
-        $stmt = self::$instance->query('SELECT COUNT(*) as count FROM users');
-        $result = $stmt->fetch();
-        
-        if ((int)$result['count'] === 0) {
-            $defaultPassword = password_hash('admin', PASSWORD_DEFAULT);
-            $now = (new \DateTimeImmutable())->format('c');
-            self::$instance->exec("
-                INSERT INTO users (username, email, password_hash, role, is_active, created_at, updated_at)
-                VALUES ('admin', 'admin@timedesk.local', '{$defaultPassword}', 'admin', 1, '{$now}', '{$now}')
-            ");
-        }
+        $migrator = new Migrator(self::$instance, DB_DRIVER);
+        $migrator->run();
+        self::$migrated = true;
     }
 
     /**
@@ -124,5 +65,73 @@ class Database
     public static function rollback(): bool
     {
         return self::getInstance()->rollBack();
+    }
+
+    /**
+     * Crée la connexion PDO en fonction du driver
+     */
+    private static function createConnection(): PDO
+    {
+        return match (DB_DRIVER) {
+            'sqlite' => self::createSqliteConnection(),
+            'mysql' => self::createMysqlConnection(),
+            default => throw new RuntimeException('Driver de base de données non supporté: ' . DB_DRIVER),
+        };
+    }
+
+    /**
+     * Connexion SQLite
+     */
+    private static function createSqliteConnection(): PDO
+    {
+        $dbPath = self::resolveSqlitePath(DB_SQLITE_PATH);
+        $directory = dirname($dbPath);
+
+        if (!is_dir($directory)) {
+            @mkdir($directory, 0755, true);
+        }
+
+        $pdo = new PDO('sqlite:' . $dbPath);
+        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+        $pdo->exec('PRAGMA foreign_keys = ON');
+
+        return $pdo;
+    }
+
+    /**
+     * Connexion MySQL
+     */
+    private static function createMysqlConnection(): PDO
+    {
+        $dsn = sprintf(
+            'mysql:host=%s;port=%d;dbname=%s;charset=%s',
+            DB_HOST,
+            DB_PORT,
+            DB_DATABASE,
+            DB_CHARSET
+        );
+
+        $pdo = new PDO($dsn, DB_USERNAME, DB_PASSWORD, [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::ATTR_EMULATE_PREPARES => false,
+        ]);
+
+        $pdo->exec(sprintf('SET NAMES %s COLLATE %s', DB_CHARSET, DB_COLLATION));
+
+        return $pdo;
+    }
+
+    /**
+     * Résout le chemin SQLite (absolu ou relatif au projet)
+     */
+    private static function resolveSqlitePath(string $path): string
+    {
+        if (preg_match('/^[A-Za-z]:\\\\/', $path) || str_starts_with($path, '/')) {
+            return $path;
+        }
+
+        return ROOT_PATH . '/' . ltrim($path, '/');
     }
 }

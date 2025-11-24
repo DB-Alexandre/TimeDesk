@@ -10,24 +10,30 @@ namespace Controllers;
 use Models\Database;
 use Models\EntryManager;
 use Models\StatsCalculator;
+use Models\UserManager;
 use Helpers\Validator;
 use Helpers\Auth;
 use Helpers\Logger;
+use Helpers\TimeHelper;
+use Helpers\EntryFilters;
 use Core\Session;
 use Core\Router;
 use DateTimeImmutable;
+use DateInterval;
 use Exception;
 
 class EntryController
 {
     private EntryManager $entryManager;
     private StatsCalculator $statsCalculator;
+    private UserManager $userManager;
 
     public function __construct()
     {
         $db = Database::getInstance();
         $this->entryManager = new EntryManager($db);
         $this->statsCalculator = new StatsCalculator($db);
+        $this->userManager = new UserManager($db);
     }
 
     /**
@@ -37,12 +43,37 @@ class EntryController
     {
         Auth::check();
 
-        // Récupération des filtres
-        $filterFrom = $_GET['from'] ?? '';
-        $filterTo = $_GET['to'] ?? '';
+        $isAdmin = Auth::isAdmin();
+        $currentUserId = Auth::getUserId();
 
-        // Récupération des entrées (filtrées par utilisateur si non-admin)
-        $userId = Auth::isAdmin() ? null : Auth::getUserId();
+        // Filtres
+        $filterFrom = EntryFilters::sanitizeDate($_GET['from'] ?? null);
+        $filterTo = EntryFilters::sanitizeDate($_GET['to'] ?? null);
+        $filterType = EntryFilters::sanitizeType($_GET['type'] ?? null);
+        $filterSearch = EntryFilters::sanitizeSearch($_GET['search'] ?? null);
+        $filterUser = $isAdmin ? EntryFilters::sanitizeUser($_GET['user'] ?? null) : null;
+        $page = EntryFilters::sanitizePage($_GET);
+        $perPage = EntryFilters::sanitizePerPage($_GET);
+
+        $filters = [];
+        if ($filterFrom) { $filters['from'] = $filterFrom; }
+        if ($filterTo) { $filters['to'] = $filterTo; }
+        if ($filterType) { $filters['type'] = $filterType; }
+        if ($filterSearch) { $filters['search'] = $filterSearch; }
+
+        if ($isAdmin) {
+            if ($filterUser !== null) {
+                $filters['user_id'] = $filterUser;
+            }
+        } else {
+            $filters['user_id'] = $currentUserId;
+        }
+
+        $searchResult = $this->entryManager->search($filters, $perPage, $page);
+        $entries = $searchResult['entries'];
+        $totalEntries = $searchResult['total'];
+        $totalPages = max(1, (int)ceil($totalEntries / $perPage));
+        $userId = $isAdmin ? null : $currentUserId;
         $entries = $this->entryManager->getAll(
             $filterFrom ?: null,
             $filterTo ?: null,
@@ -64,6 +95,14 @@ class EntryController
         );
 
         // Variables pour la vue
+        $filterArray = $this->filterArray([
+            'from' => $filterFrom,
+            'to' => $filterTo,
+            'type' => $filterType,
+            'search' => $filterSearch,
+            'user' => $filterUser,
+        ]);
+
         $data = [
             'entries' => $entries,
             'today' => $today,
@@ -74,10 +113,117 @@ class EntryController
             'defaultStartTime' => $defaultStartTime,
             'filterFrom' => $filterFrom,
             'filterTo' => $filterTo,
+            'filterType' => $filterType,
+            'filterSearch' => $filterSearch,
+            'filterUser' => $filterUser,
+            'perPage' => $perPage,
+            'page' => $page,
+            'totalEntries' => $totalEntries,
+            'totalPages' => $totalPages,
+            'usersList' => $isAdmin ? $this->userManager->getAll() : [],
+            'filterQuery' => http_build_query($filterArray),
+            'filterQueryArray' => $filterArray,
             'flash' => Session::getFlash(),
         ];
 
         $this->render('pages/dashboard', $data);
+    }
+
+    /**
+     * Vue calendrier
+     */
+    public function calendar(): void
+    {
+        Auth::check();
+
+        $isAdmin = Auth::isAdmin();
+        $currentUserId = Auth::getUserId();
+
+        $monthParam = $_GET['month'] ?? (new DateTimeImmutable('first day of this month'))->format('Y-m');
+        try {
+            $currentMonth = new DateTimeImmutable($monthParam . '-01');
+        } catch (\Exception) {
+            $currentMonth = new DateTimeImmutable('first day of this month');
+        }
+
+        $selectedUser = $isAdmin ? EntryFilters::sanitizeUser($_GET['user'] ?? null) : $currentUserId;
+
+        $monthStart = $currentMonth->modify('first day of this month');
+        $monthEnd = $currentMonth->modify('last day of this month');
+
+        $entries = $this->entryManager->getAll(
+            $monthStart->format('Y-m-d'),
+            $monthEnd->format('Y-m-d'),
+            $selectedUser
+        );
+
+        $entriesByDay = [];
+        foreach ($entries as $entry) {
+            $entriesByDay[$entry['date']][] = $entry;
+        }
+
+        $calendarStart = $monthStart->modify('monday this week');
+        $calendarEnd = $monthEnd->modify('sunday this week');
+        $period = new \DatePeriod($calendarStart, new DateInterval('P1D'), $calendarEnd->modify('+1 day'));
+
+        $weeks = [];
+        $currentWeek = [];
+
+        foreach ($period as $date) {
+            $dayString = $date->format('Y-m-d');
+            $dayEntries = $entriesByDay[$dayString] ?? [];
+            $workMinutes = 0;
+            $breakMinutes = 0;
+
+            foreach ($dayEntries as $entry) {
+                $duration = TimeHelper::calculateDuration($entry['start_time'], $entry['end_time']);
+                if ($entry['type'] === 'break') {
+                    $breakMinutes += $duration;
+                } else {
+                    $workMinutes += $duration;
+                }
+            }
+
+            $currentWeek[] = [
+                'date' => $date,
+                'day' => (int)$date->format('d'),
+                'isCurrentMonth' => $date->format('m') === $monthStart->format('m'),
+                'isToday' => $dayString === (new DateTimeImmutable('today'))->format('Y-m-d'),
+                'entries' => $dayEntries,
+                'work_minutes' => $workMinutes,
+                'break_minutes' => $breakMinutes,
+            ];
+
+            if (count($currentWeek) === 7) {
+                $weeks[] = $currentWeek;
+                $currentWeek = [];
+            }
+        }
+
+        $prevMonthParam = $monthStart->modify('-1 month')->format('Y-m');
+        $nextMonthParam = $monthStart->modify('+1 month')->format('Y-m');
+
+        $this->render('pages/calendar', [
+            'weeks' => $weeks,
+            'currentMonth' => $monthStart,
+            'selectedUser' => $selectedUser,
+            'usersList' => $isAdmin ? $this->userManager->getAll() : [],
+            'isAdmin' => $isAdmin,
+            'prevMonth' => $prevMonthParam,
+            'nextMonth' => $nextMonthParam,
+            'flash' => Session::getFlash(),
+        ]);
+    }
+
+    private function filterArray(array $filters): array
+    {
+        $query = [];
+        foreach ($filters as $key => $value) {
+            if ($value !== null && $value !== '') {
+                $query[$key] = $value;
+            }
+        }
+        return $query;
     }
 
     /**

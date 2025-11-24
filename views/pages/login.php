@@ -12,7 +12,13 @@
     <div class="card glass" style="width: 100%; max-width: 400px;">
         <div class="card-body">
             <h1 class="h3 mb-4 text-center accent"><?= Helpers\Validator::escape(APP_TITLE) ?></h1>
-            
+
+            <?php if (isset($flash) && is_array($flash)): ?>
+                <div class="alert alert-<?= $flash['type'] === 'success' ? 'success' : 'info' ?>">
+                    <?= Helpers\Validator::escape($flash['message']) ?>
+                </div>
+            <?php endif; ?>
+
             <?php if (isset($error)): ?>
                 <div class="alert alert-danger"><?= Helpers\Validator::escape($error) ?></div>
             <?php endif; ?>
@@ -28,6 +34,10 @@
                 </div>
                 <button type="submit" class="btn btn-primary w-100">Se connecter</button>
             </form>
+
+            <div class="text-center mt-3">
+                <a href="?action=forgot-password" class="text-decoration-none small">Mot de passe oublié ?</a>
+            </div>
         </div>
     </div>
 

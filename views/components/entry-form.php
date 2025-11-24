@@ -31,6 +31,8 @@ use Core\Session;
                     <label class="btn btn-outline-success" for="typeWork">Travail</label>
                     <input type="radio" class="btn-check" name="type" id="typeBreak" value="break">
                     <label class="btn btn-outline-warning" for="typeBreak">Pause</label>
+                    <input type="radio" class="btn-check" name="type" id="typeCourse" value="course">
+                    <label class="btn btn-outline-info" for="typeCourse">Cours</label>
                 </div>
             </div>
 

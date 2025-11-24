@@ -8,22 +8,25 @@ Application web de suivi du temps de travail moderne, sécurisée et facile à u
 
 ## ✨ Fonctionnalités
 
-- ⏱️ **Suivi du temps** : Enregistrement précis des heures de travail et pauses
+- ⏱️ **Suivi du temps** : Travail, pauses et journées de cours
 - 📈 **Statistiques détaillées** : Vue journalière, hebdomadaire, mensuelle et annuelle
+- 📅 **Calendrier interactif** : Visualisez vos temps dans un planning mensuel
 - 🎯 **Objectifs** : Suivi de progression par rapport aux objectifs contractuels
+- 🔍 **Filtres avancés** : Recherche, filtres par type/utilisateur, pagination
 - 🌓 **Thème sombre/clair** : Interface adaptable selon vos préférences
 - 📱 **Design responsive** : Fonctionne sur desktop, tablette et mobile
-- 💾 **SQLite** : Base de données locale, pas de configuration serveur
+- 💾 **SQLite ou MySQL** : Choisissez le moteur adapté (local ou serveur)
 - 🔒 **Sécurisé** : Protection CSRF, validation des données, authentification optionnelle
-- 📥 **Export CSV** : Exportez vos données facilement
+- 📥 **Exports CSV / Excel / PDF** : Rapport complet en un clic
 
 ## 🚀 Installation
 
 ### Prérequis
 
 - PHP 8.1 ou supérieur
-- Extension SQLite3 activée
+- Extension PDO-SQLite ou PDO-MySQL selon le moteur choisi
 - Serveur web (Apache, Nginx)
+- (Optionnel) MySQL 8.x si vous activez ce driver
 
 ### Installation rapide
 
@@ -33,12 +36,61 @@ Application web de suivi du temps de travail moderne, sécurisée et facile à u
    cd timedesk
    ```
 
-2. **Configurez les permissions**
+2. **Créez le fichier d'environnement (`.env` ou `.env.local`)**
+
+   Exemple de contenu :
+   ```env
+   APP_ENV=production
+   APP_DEBUG=false
+
+   DB_DRIVER=sqlite           # sqlite ou mysql
+   DB_SQLITE_PATH=data/timesheet.sqlite
+
+   # Paramètres MySQL (ignorés en mode sqlite)
+   DB_HOST=127.0.0.1
+   DB_PORT=3306
+   DB_DATABASE=timedesk
+   DB_USERNAME=timedesk
+   DB_PASSWORD=secret
+   DB_CHARSET=utf8mb4
+   DB_COLLATION=utf8mb4_unicode_ci
+
+   # Sécurité & email
+   SESSION_TIMEOUT=3600
+   LOGIN_MAX_ATTEMPTS=5
+   LOGIN_LOCK_WINDOW=900
+   PASSWORD_MIN_LENGTH=10
+   PASSWORD_REQUIRE_UPPERCASE=true
+   PASSWORD_REQUIRE_LOWERCASE=true
+   PASSWORD_REQUIRE_DIGIT=true
+   PASSWORD_REQUIRE_SPECIAL=true
+   PASSWORD_RESET_EXPIRY=3600
+
+   MAIL_ENABLED=false
+   MAIL_FROM_ADDRESS=no-reply@timedesk.local
+   MAIL_FROM_NAME="TimeDesk"
+
+   # Logs & alerting
+   LOG_MAX_SIZE_MB=10
+   LOG_RETENTION_DAYS=7
+
+   ALERT_ENABLED=false
+   ALERT_WEBHOOK_URL=https://hooks.slack.com/services/EXAMPLE
+   ALERT_WEBHOOK_METHOD=POST
+   ALERT_EVENTS=login_blocked,db_console_query,user_deleted
+   ```
+
+3. **Lancez les migrations**
+   ```bash
+   php bin/migrate.php
+   ```
+
+4. **Configurez les permissions**
    ```bash
    chmod 755 data/ logs/
    ```
 
-3. **Configurez votre serveur web**
+5. **Configurez votre serveur web**
    
    **Apache** : Le fichier `.htaccess` est déjà configuré
    
@@ -49,12 +101,12 @@ Application web de suivi du temps de travail moderne, sécurisée et facile à u
    }
    ```
 
-4. **Accédez à l'application**
+6. **Accédez à l'application**
    ```
    http://votre-domaine.com/
    ```
 
-5. **Configuration initiale**
+7. **Configuration initiale**
    
    Éditez `config/config.php` pour personnaliser :
    - Fuseau horaire
@@ -79,6 +131,12 @@ define('AUTH_PASSWORD_HASH', '...');      // Hash du mot de passe
 define('MAX_DESCRIPTION_LENGTH', 500);    // Longueur max descriptions
 define('MAX_ENTRIES_PER_DAY', 50);        // Limite entrées/jour
 ```
+### Choisir le moteur de base de données
+
+- **SQLite (par défaut)** : idéal pour un déploiement simple sur un serveur unique. Configurez `DB_DRIVER=sqlite` et `DB_SQLITE_PATH=data/timesheet.sqlite`.
+- **MySQL** : recommandé pour des installations multi-utilisateurs ou un hébergement partagé. Configurez `DB_DRIVER=mysql` et renseignez `DB_HOST`, `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD`, etc.
+
+> Les migrations sont exécutées automatiquement au premier accès, mais vous pouvez aussi lancer `php bin/migrate.php` pour vous assurer que le schéma est à jour.
 
 ### Activer l'authentification
 
@@ -159,7 +217,7 @@ timedesk/
 1. Sélectionnez la date
 2. Entrez l'heure de début (auto-complétée avec la dernière heure de fin)
 3. Entrez l'heure de fin
-4. Choisissez le type (Travail ou Pause)
+4. Choisissez le type (Travail, Pause ou Cours)
 5. Ajoutez une description (optionnel)
 6. Cliquez sur "Enregistrer"
 
@@ -176,8 +234,15 @@ timedesk/
 
 ### Exporter les données
 
-1. Cliquez sur le bouton "📥 Exporter en CSV"
-2. Le fichier CSV sera téléchargé automatiquement
+1. Utilisez les filtres souhaités sur le tableau de bord
+2. Choisissez le format désiré (CSV, Excel, PDF)
+3. Téléchargez votre rapport prêt à l’emploi
+
+## 🔔 Monitoring & CI
+
+- **Alertes webhook** : activez `ALERT_ENABLED=true` + URL pour recevoir les événements critiques (tentatives bloquées, suppressions, requêtes DB console, etc.).  
+- **Rotation de logs** : personnalisez `LOG_MAX_SIZE_MB` et `LOG_RETENTION_DAYS`.  
+- **CI GitHub Actions** : le workflow `.github/workflows/ci.yml` exécute `php -l` sur tout le projet à chaque push/PR sur `main`.
 
 ## 🛠️ Développement
 

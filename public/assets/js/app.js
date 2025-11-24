@@ -45,8 +45,15 @@
             endTimeInput.value = entry.end_time;
             descriptionInput.value = entry.description || '';
             
-            const typeId = entry.type === 'break' ? 'typeBreak' : 'typeWork';
-            document.getElementById(typeId).checked = true;
+            const typeId = entry.type === 'break'
+                ? 'typeBreak'
+                : entry.type === 'course'
+                    ? 'typeCourse'
+                    : 'typeWork';
+            const typeInput = document.getElementById(typeId);
+            if (typeInput) {
+                typeInput.checked = true;
+            }
             
             formId.value = entry.id;
             form.action = '?action=update';
@@ -65,7 +72,10 @@
             startTimeInput.value = lastEnd || '';
             endTimeInput.value = '';
             descriptionInput.value = '';
-            document.getElementById('typeWork').checked = true;
+            const typeDefault = document.getElementById('typeWork');
+            if (typeDefault) {
+                typeDefault.checked = true;
+            }
         }
 
         /**

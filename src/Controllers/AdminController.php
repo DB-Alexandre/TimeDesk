@@ -13,16 +13,19 @@ use Helpers\Auth;
 use Helpers\Logger;
 use Helpers\Validator;
 use Models\Database;
+use Models\SecurityLogManager;
 use PDO;
 use InvalidArgumentException;
 
 class AdminController
 {
     private PDO $db;
+    private SecurityLogManager $securityLogManager;
 
     public function __construct()
     {
         $this->db = Database::getInstance();
+        $this->securityLogManager = new SecurityLogManager($this->db);
     }
 
     /**
@@ -339,6 +342,25 @@ class AdminController
     private function quoteIdentifier(string $identifier): string
     {
         return '"' . str_replace('"', '""', $identifier) . '"';
+    }
+
+    /**
+     * Tableau de bord sécurité
+     */
+    public function audit(): void
+    {
+        Auth::requireAdmin();
+
+        $loginAttempts = $this->securityLogManager->getRecentLoginAttempts(100);
+        $passwordResets = $this->securityLogManager->getRecentPasswordResets(50);
+        $fileLogs = Logger::getRecentLogs(7, 100);
+
+        $this->render('pages/security-audit', [
+            'flash' => Session::getFlash(),
+            'loginAttempts' => $loginAttempts,
+            'passwordResets' => $passwordResets,
+            'fileLogs' => $fileLogs,
+        ]);
     }
 
     private function render(string $view, array $data = []): void

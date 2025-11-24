@@ -22,7 +22,6 @@ class Logger
 
     private const LOG_FILE_PREFIX = 'timedesk_';
     private const LOG_FILE_EXTENSION = '.log';
-    private const MAX_LOG_SIZE = 10 * 1024 * 1024; // 10 MB
 
     /**
      * Enregistre un log
@@ -56,7 +55,8 @@ class Logger
         $logFile = self::getLogFile();
         
         // Rotation des logs si nécessaire
-        if (file_exists($logFile) && filesize($logFile) > self::MAX_LOG_SIZE) {
+        $maxSize = max(1, LOG_MAX_SIZE_MB) * 1024 * 1024;
+        if (file_exists($logFile) && filesize($logFile) > $maxSize) {
             self::rotateLog($logFile);
         }
 
@@ -68,6 +68,9 @@ class Logger
 
         // Écriture du log
         @file_put_contents($logFile, $logEntry, FILE_APPEND | LOCK_EX);
+
+        // Nettoyage périodique
+        self::cleanupOldLogs();
     }
 
     /**
@@ -126,6 +129,10 @@ class Logger
         ], $details);
 
         self::info("User action: {$action}", $context);
+
+        if (self::shouldDispatchAlert($action)) {
+            Notifier::send('Alerte TimeDesk - ' . $action, $context);
+        }
     }
 
     /**
@@ -145,16 +152,47 @@ class Logger
         $backupFile = $logFile . '.' . time() . '.bak';
         @rename($logFile, $backupFile);
         
-        // Supprimer les anciens backups (garder seulement les 7 derniers jours)
+        // Supprimer les anciens backups selon la rétention
         $files = glob(dirname($logFile) . '/' . self::LOG_FILE_PREFIX . '*.bak');
-        if (count($files) > 7) {
+        $retention = max(1, LOG_RETENTION_DAYS);
+        if (count($files) > $retention) {
             usort($files, function($a, $b) {
                 return filemtime($a) - filemtime($b);
             });
-            foreach (array_slice($files, 0, -7) as $oldFile) {
+            foreach (array_slice($files, 0, -$retention) as $oldFile) {
                 @unlink($oldFile);
             }
         }
+    }
+
+    /**
+     * Nettoie les fichiers de log trop anciens
+     */
+    private static function cleanupOldLogs(): void
+    {
+        $retention = max(1, LOG_RETENTION_DAYS);
+        $threshold = (new \DateTimeImmutable("-{$retention} days"))->format('Y-m-d');
+        $files = glob(LOGS_PATH . '/' . self::LOG_FILE_PREFIX . '*.log');
+
+        foreach ($files as $file) {
+            $datePart = substr(basename($file), strlen(self::LOG_FILE_PREFIX), 10);
+            if ($datePart < $threshold) {
+                @unlink($file);
+            }
+        }
+    }
+
+    private static function shouldDispatchAlert(string $action): bool
+    {
+        if (!ALERT_ENABLED) {
+            return false;
+        }
+
+        if (empty(ALERT_EVENTS)) {
+            return false;
+        }
+
+        return in_array($action, ALERT_EVENTS, true);
     }
 
     /**

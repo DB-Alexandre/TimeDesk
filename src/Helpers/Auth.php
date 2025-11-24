@@ -11,10 +11,12 @@ use Core\Session;
 use Core\Router;
 use Models\Database;
 use Models\UserManager;
+use Models\SecurityLogManager;
 
 class Auth
 {
     private static ?UserManager $userManager = null;
+    private static ?SecurityLogManager $securityLogManager = null;
 
     /**
      * Obtient l'instance UserManager
@@ -25,6 +27,17 @@ class Auth
             self::$userManager = new UserManager(Database::getInstance());
         }
         return self::$userManager;
+    }
+
+    /**
+     * Gestionnaire de sécurité
+     */
+    private static function getSecurityLogManager(): SecurityLogManager
+    {
+        if (self::$securityLogManager === null) {
+            self::$securityLogManager = new SecurityLogManager(Database::getInstance());
+        }
+        return self::$securityLogManager;
     }
 
     /**
@@ -49,6 +62,22 @@ class Auth
             return false;
         }
 
+        $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+        $security = self::getSecurityLogManager();
+
+        if ($security->isLocked($username, $ip)) {
+            Logger::warning('Login blocked (rate limit)', [
+                'username' => $username,
+                'ip' => $ip,
+            ]);
+            Session::set('login_error', 'Trop de tentatives échouées. Veuillez réessayer plus tard.');
+            Logger::userAction('login_blocked', null, [
+                'username' => $username,
+                'ip' => $ip,
+            ]);
+            return false;
+        }
+
         $userManager = self::getUserManager();
         $user = $userManager->verifyCredentials($username, $password);
 
@@ -58,7 +87,11 @@ class Auth
             Session::set('username', $user['username']);
             Session::set('user_role', $user['role']);
             Session::set('login_time', time());
+            Session::set('last_activity', time());
+            Session::set('session_ip', $ip);
+            Session::set('session_token', bin2hex(random_bytes(32)));
             Session::regenerate();
+            $security->recordLoginAttempt($username, $ip, true);
             
             Logger::userAction('login', $user['id'], [
                 'username' => $user['username'],
@@ -67,9 +100,10 @@ class Auth
             return true;
         }
         
+        $security->recordLoginAttempt($username, $ip, false);
         Logger::warning('Failed login attempt', [
             'username' => $username,
-            'ip' => $_SERVER['REMOTE_ADDR'] ?? 'unknown',
+            'ip' => $ip,
         ]);
         
         return false;
@@ -92,9 +126,59 @@ class Auth
      */
     public static function check(): void
     {
-        if (ENABLE_AUTH && !self::isAuthenticated()) {
-            header('Location: ' . $_SERVER['SCRIPT_NAME'] . '?action=login');
-            exit;
+        if (!ENABLE_AUTH) {
+            return;
+        }
+
+        if (!self::isAuthenticated()) {
+            Router::redirect('?action=login');
+        }
+
+        if (self::hasSessionExpired()) {
+            self::logout();
+            Session::start();
+            Session::set('login_error', 'Votre session a expiré. Veuillez vous reconnecter.');
+            Router::redirect('?action=login');
+        }
+
+        $sessionIp = Session::get('session_ip');
+        $currentIp = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+        if ($sessionIp && $sessionIp !== $currentIp) {
+            self::logout();
+            Session::start();
+            Session::set('login_error', 'Session invalide (adresse IP différente).');
+            Router::redirect('?action=login');
+        }
+
+        Session::set('last_activity', time());
+    }
+
+    /**
+     * Vérifie l'expiration de session
+     */
+    private static function hasSessionExpired(): bool
+    {
+        if (SESSION_TIMEOUT <= 0) {
+            return false;
+        }
+
+        $lastActivity = Session::get('last_activity');
+        if (!$lastActivity) {
+            return false;
+        }
+
+        return (time() - (int)$lastActivity) > SESSION_TIMEOUT;
+    }
+
+    /**
+     * Force le rôle admin
+     */
+    public static function requireAdmin(): void
+    {
+        self::check();
+        if (!self::isAdmin()) {
+            Session::setFlash('error', 'Accès refusé');
+            Router::redirect('/');
         }
     }
 
@@ -148,6 +232,7 @@ class Auth
      */
     public static function hashPassword(string $password): string
     {
+        PasswordPolicy::validate($password);
         return password_hash($password, PASSWORD_DEFAULT);
     }
 

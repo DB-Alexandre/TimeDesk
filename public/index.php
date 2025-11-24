@@ -45,20 +45,57 @@ try {
         exit;
     }
 
+    if ($action === 'audit-log') {
+        $adminController = new AdminController();
+        $adminController->audit();
+        exit;
+    }
+
     if ($action === 'export-csv') {
         $apiController = new ApiController();
         $apiController->exportCsv();
         exit;
     }
 
+    if ($action === 'export-xlsx') {
+        $apiController = new ApiController();
+        $apiController->exportXlsx();
+        exit;
+    }
+
+    if ($action === 'export-pdf') {
+        $apiController = new ApiController();
+        $apiController->exportPdf();
+        exit;
+    }
+
     // Routes d'authentification
     if ($action === 'login') {
+        $authController = new AuthController();
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            $authController = new AuthController();
             $authController->login();
         } else {
-            $authController = new AuthController();
             $authController->loginForm();
+        }
+        exit;
+    }
+
+    if ($action === 'forgot-password') {
+        $authController = new AuthController();
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $authController->sendResetLink();
+        } else {
+            $authController->forgotPasswordForm();
+        }
+        exit;
+    }
+
+    if ($action === 'reset-password') {
+        $authController = new AuthController();
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $authController->resetPassword();
+        } else {
+            $authController->resetPasswordForm();
         }
         exit;
     }
@@ -113,6 +150,10 @@ try {
 
         case 'delete':
             $entryController->delete();
+            break;
+
+        case 'calendar':
+            $entryController->calendar();
             break;
 
         case 'index':

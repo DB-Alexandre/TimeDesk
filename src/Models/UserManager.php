@@ -9,6 +9,7 @@ namespace Models;
 
 use PDO;
 use Helpers\Validator;
+use Helpers\PasswordPolicy;
 use InvalidArgumentException;
 use RuntimeException;
 use DateTimeImmutable;
@@ -173,6 +174,16 @@ class UserManager
     }
 
     /**
+     * Récupère un utilisateur par email
+     */
+    public function findByEmail(string $email): ?array
+    {
+        $stmt = $this->db->prepare('SELECT * FROM users WHERE email = ? AND is_active = 1');
+        $stmt->execute([$email]);
+        return $stmt->fetch() ?: null;
+    }
+
+    /**
      * Récupère tous les utilisateurs
      */
     public function getAll(): array
@@ -227,6 +238,20 @@ class UserManager
     }
 
     /**
+     * Met à jour uniquement le mot de passe
+     */
+    public function updatePassword(int $userId, string $password): void
+    {
+        PasswordPolicy::validate($password);
+        $stmt = $this->db->prepare('UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?');
+        $stmt->execute([
+            password_hash($password, PASSWORD_DEFAULT),
+            (new DateTimeImmutable())->format('c'),
+            $userId,
+        ]);
+    }
+
+    /**
      * Vérifie si un username existe
      */
     public function usernameExists(string $username, ?int $excludeId = null): bool
@@ -271,13 +296,11 @@ class UserManager
      */
     private function validateUserData(array $data, bool $requirePassword = false): void
     {
-        if ($requirePassword || isset($data['password'])) {
+        if ($requirePassword || array_key_exists('password', $data)) {
             if (empty($data['password'])) {
                 throw new InvalidArgumentException('Le mot de passe est requis');
             }
-            if (strlen($data['password']) < 6) {
-                throw new InvalidArgumentException('Le mot de passe doit contenir au moins 6 caractères');
-            }
+            PasswordPolicy::validate($data['password']);
         }
 
         if (isset($data['username'])) {

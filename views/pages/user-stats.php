@@ -32,7 +32,7 @@ use Helpers\Auth;
                         <h3 class="h5 text-muted">Total entrées</h3>
                         <div class="h2"><?= $totalEntries ?></div>
                         <small class="text-muted">
-                            <?= $totalWorkEntries ?> travail, <?= $totalBreakEntries ?> pauses
+                            <?= $totalWorkEntries ?> travail, <?= $totalCourseEntries ?> cours, <?= $totalBreakEntries ?> pauses
                         </small>
                     </div>
                 </div>
@@ -124,22 +124,36 @@ use Helpers\Auth;
         </div>
 
         <!-- Visualisations -->
-        <div class="row g-3 mb-4">
-            <div class="col-md-6">
-                <div class="card glass h-100">
-                    <div class="card-body">
-                        <h3 class="h5 mb-3">Tendance mensuelle</h3>
-                        <canvas id="monthlyTrendChart" height="220"></canvas>
-                        <small class="text-muted d-block mt-2">Net (heures) vs cible mensuelle</small>
+        <div class="card glass mb-4">
+            <div class="card-body">
+                <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+                    <div>
+                        <h3 class="h5 mb-1">Visualisations du temps enregistré</h3>
+                        <small class="text-muted">Passez d’une granularité à l’autre pour analyser la tendance.</small>
+                    </div>
+                    <div class="btn-group btn-group-sm" role="group" aria-label="Plages de temps">
+                        <button type="button" class="btn btn-outline-light" data-range="daily">
+                            Jour
+                        </button>
+                        <button type="button" class="btn btn-outline-light" data-range="weekly">
+                            Semaine
+                        </button>
+                        <button type="button" class="btn btn-outline-light active" data-range="monthly">
+                            Mois
+                        </button>
+                        <button type="button" class="btn btn-outline-light" data-range="yearly">
+                            Année
+                        </button>
                     </div>
                 </div>
-            </div>
-            <div class="col-md-6">
-                <div class="card glass h-100">
-                    <div class="card-body">
-                        <h3 class="h5 mb-3">Tendance hebdomadaire</h3>
-                        <canvas id="weeklyTrendChart" height="220"></canvas>
-                        <small class="text-muted d-block mt-2">Net (heures) vs cible hebdomadaire</small>
+                <div class="row g-3">
+                    <div class="col-lg-6">
+                        <h4 class="h6 text-muted mb-2">Net vs cible</h4>
+                        <canvas id="trendLineChart" height="240"></canvas>
+                    </div>
+                    <div class="col-lg-6">
+                        <h4 class="h6 text-muted mb-2">Répartition Travail/Cours vs Pause</h4>
+                        <canvas id="trendBarChart" height="240"></canvas>
                     </div>
                 </div>
             </div>
@@ -297,17 +311,30 @@ use Helpers\Auth;
                 <div class="card glass">
                     <div class="card-body">
                         <h3 class="h5 mb-3">Répartition</h3>
+                        <?php 
+                        $workPercent = $totalEntries > 0 ? round($totalWorkEntries / $totalEntries * 100) : 0;
+                        $coursePercent = $totalEntries > 0 ? round($totalCourseEntries / $totalEntries * 100) : 0;
+                        $breakPercent = $totalEntries > 0 ? round($totalBreakEntries / $totalEntries * 100) : 0;
+                        ?>
                         <div class="mb-3">
                             <div class="d-flex justify-content-between mb-1">
                                 <span>Entrées de travail</span>
                                 <strong><?= $totalWorkEntries ?></strong>
                             </div>
                             <div class="progress" style="height: 20px;">
-                                <?php 
-                                $workPercent = $totalEntries > 0 ? round($totalWorkEntries / $totalEntries * 100) : 0;
-                                ?>
                                 <div class="progress-bar bg-success" style="width: <?= $workPercent ?>%">
                                     <?= $workPercent ?>%
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between mb-1">
+                                <span>Entrées de cours</span>
+                                <strong><?= $totalCourseEntries ?></strong>
+                            </div>
+                            <div class="progress" style="height: 20px;">
+                                <div class="progress-bar bg-info" style="width: <?= $coursePercent ?>%">
+                                    <?= $coursePercent ?>%
                                 </div>
                             </div>
                         </div>
@@ -317,9 +344,6 @@ use Helpers\Auth;
                                 <strong><?= $totalBreakEntries ?></strong>
                             </div>
                             <div class="progress" style="height: 20px;">
-                                <?php 
-                                $breakPercent = $totalEntries > 0 ? round($totalBreakEntries / $totalEntries * 100) : 0;
-                                ?>
                                 <div class="progress-bar bg-warning" style="width: <?= $breakPercent ?>%">
                                     <?= $breakPercent ?>%
                                 </div>
@@ -355,8 +379,13 @@ use Helpers\Auth;
                                         <?php foreach ($recentEntries as $entry): ?>
                                             <?php
                                             $duration = TimeHelper::calculateDuration($entry['start_time'], $entry['end_time']);
-                                            $isBreak = $entry['type'] === 'break';
                                             $entryDate = new DateTimeImmutable($entry['date']);
+                                            $type = $entry['type'];
+                                            $typeLabel = match($type) {
+                                                'break' => ['label' => 'Pause', 'class' => 'bg-warning text-dark'],
+                                                'course' => ['label' => 'Cours', 'class' => 'bg-info text-dark'],
+                                                default => ['label' => 'Travail', 'class' => 'bg-success'],
+                                            };
                                             ?>
                                             <tr>
                                                 <td><?= $entryDate->format('d/m/Y') ?></td>
@@ -364,8 +393,8 @@ use Helpers\Auth;
                                                 <td><?= Validator::escape($entry['end_time']) ?></td>
                                                 <td><?= TimeHelper::formatMinutes($duration) ?></td>
                                                 <td>
-                                                    <span class="badge <?= $isBreak ? 'bg-warning' : 'bg-success' ?>">
-                                                        <?= $isBreak ? 'Pause' : 'Travail' ?>
+                                                    <span class="badge <?= $typeLabel['class'] ?>">
+                                                        <?= $typeLabel['label'] ?>
                                                     </span>
                                                 </td>
                                                 <td><?= Validator::escape($entry['description']) ?></td>
@@ -383,16 +412,35 @@ use Helpers\Auth;
 </div>
 
 <?php
-$monthlyChartData = [
-    'labels' => array_map(static fn ($month) => $month['label'], $monthlyBreakdown),
-    'net' => array_map(static fn ($month) => round($month['net_minutes'] / 60, 2), $monthlyBreakdown),
-    'target' => array_map(static fn ($month) => round($month['target_minutes'] / 60, 2), $monthlyBreakdown),
-];
-
-$weeklyChartData = [
-    'labels' => array_map(static fn ($week) => $week['label'], $weeklyBreakdown),
-    'net' => array_map(static fn ($week) => round($week['net_minutes'] / 60, 2), $weeklyBreakdown),
-    'target' => array_map(static fn ($week) => round($week['target_minutes'] / 60, 2), $weeklyBreakdown),
+$trendChartData = [
+    'daily' => [
+        'labels' => array_map(static fn ($day) => $day['label'], $dailyBreakdown),
+        'net' => array_map(static fn ($day) => round($day['net_minutes'] / 60, 2), $dailyBreakdown),
+        'target' => array_map(static fn ($day) => round($day['target_minutes'] / 60, 2), $dailyBreakdown),
+        'work' => array_map(static fn ($day) => round($day['work_minutes'] / 60, 2), $dailyBreakdown),
+        'break' => array_map(static fn ($day) => round($day['break_minutes'] / 60, 2), $dailyBreakdown),
+    ],
+    'weekly' => [
+        'labels' => array_map(static fn ($week) => $week['label'], $weeklyBreakdown),
+        'net' => array_map(static fn ($week) => round($week['net_minutes'] / 60, 2), $weeklyBreakdown),
+        'target' => array_map(static fn ($week) => round($week['target_minutes'] / 60, 2), $weeklyBreakdown),
+        'work' => array_map(static fn ($week) => round($week['work_minutes'] / 60, 2), $weeklyBreakdown),
+        'break' => array_map(static fn ($week) => round($week['break_minutes'] / 60, 2), $weeklyBreakdown),
+    ],
+    'monthly' => [
+        'labels' => array_map(static fn ($month) => $month['label'], $monthlyBreakdown),
+        'net' => array_map(static fn ($month) => round($month['net_minutes'] / 60, 2), $monthlyBreakdown),
+        'target' => array_map(static fn ($month) => round($month['target_minutes'] / 60, 2), $monthlyBreakdown),
+        'work' => array_map(static fn ($month) => round($month['work_minutes'] / 60, 2), $monthlyBreakdown),
+        'break' => array_map(static fn ($month) => round($month['break_minutes'] / 60, 2), $monthlyBreakdown),
+    ],
+    'yearly' => [
+        'labels' => array_map(static fn ($year) => $year['label'], $yearlyBreakdown),
+        'net' => array_map(static fn ($year) => round($year['net_minutes'] / 60, 2), $yearlyBreakdown),
+        'target' => array_map(static fn ($year) => round($year['target_minutes'] / 60, 2), $yearlyBreakdown),
+        'work' => array_map(static fn ($year) => round($year['work_minutes'] / 60, 2), $yearlyBreakdown),
+        'break' => array_map(static fn ($year) => round($year['break_minutes'] / 60, 2), $yearlyBreakdown),
+    ],
 ];
 ?>
 
@@ -403,86 +451,121 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
     }
 
-    const monthlyCtx = document.getElementById('monthlyTrendChart');
-    const weeklyCtx = document.getElementById('weeklyTrendChart');
+    const lineCtx = document.getElementById('trendLineChart');
+    const barCtx = document.getElementById('trendBarChart');
+    const rangeButtons = document.querySelectorAll('[data-range]');
+    const trendData = <?php echo json_encode($trendChartData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
 
-    const monthlyData = <?php echo json_encode($monthlyChartData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
-    const weeklyData = <?php echo json_encode($weeklyChartData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
-
-    if (monthlyCtx && monthlyData.labels.length) {
-        new Chart(monthlyCtx, {
-            type: 'line',
-            data: {
-                labels: monthlyData.labels,
-                datasets: [
-                    {
-                        label: 'Net (h)',
-                        data: monthlyData.net,
-                        borderColor: '#0d6efd',
-                        backgroundColor: 'rgba(13, 110, 253, 0.1)',
-                        tension: 0.35,
-                        fill: true,
-                    },
-                    {
-                        label: 'Cible (h)',
-                        data: monthlyData.target,
-                        borderColor: '#6c757d',
-                        borderDash: [6, 6],
-                        tension: 0.35,
-                        fill: false,
-                    },
-                ],
-            },
-            options: {
-                responsive: true,
-                plugins: {
-                    legend: {
-                        position: 'bottom',
-                    },
-                },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                    },
-                },
-            },
-        });
+    if (!lineCtx || !barCtx) {
+        return;
     }
 
-    if (weeklyCtx && weeklyData.labels.length) {
-        new Chart(weeklyCtx, {
-            type: 'bar',
-            data: {
-                labels: weeklyData.labels,
-                datasets: [
-                    {
-                        label: 'Net (h)',
-                        data: weeklyData.net,
-                        backgroundColor: '#20c997',
-                        borderRadius: 4,
-                    },
-                    {
-                        label: 'Cible (h)',
-                        data: weeklyData.target,
-                        backgroundColor: '#adb5bd',
-                        borderRadius: 4,
-                    },
-                ],
+    let currentRange = 'monthly';
+
+    const createLineDataset = (rangeKey) => ({
+        labels: trendData[rangeKey]?.labels ?? [],
+        datasets: [
+            {
+                label: 'Net (h)',
+                data: trendData[rangeKey]?.net ?? [],
+                borderColor: '#0d6efd',
+                backgroundColor: 'rgba(13, 110, 253, 0.08)',
+                tension: 0.35,
+                fill: true,
             },
-            options: {
-                responsive: true,
-                plugins: {
-                    legend: {
-                        position: 'bottom',
+            {
+                label: 'Cible (h)',
+                data: trendData[rangeKey]?.target ?? [],
+                borderColor: '#6c757d',
+                borderDash: [6, 6],
+                pointRadius: 0,
+                tension: 0.35,
+                fill: false,
+            },
+        ],
+    });
+
+    const createBarDataset = (rangeKey) => ({
+        labels: trendData[rangeKey]?.labels ?? [],
+        datasets: [
+            {
+                label: 'Travail (h)',
+                data: trendData[rangeKey]?.work ?? [],
+                backgroundColor: '#198754',
+                borderRadius: 4,
+                maxBarThickness: 32,
+            },
+            {
+                label: 'Pause (h)',
+                data: trendData[rangeKey]?.break ?? [],
+                backgroundColor: '#ffc107',
+                borderRadius: 4,
+                maxBarThickness: 32,
+            },
+        ],
+    });
+
+    const lineChart = new Chart(lineCtx, {
+        type: 'line',
+        data: createLineDataset(currentRange),
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { position: 'bottom' },
+                tooltip: {
+                    callbacks: {
+                        label: (context) => `${context.dataset.label}: ${context.formattedValue} h`,
                     },
                 },
-                scales: {
-                    y: {
-                        beginAtZero: true,
+            },
+            scales: { y: { beginAtZero: true } },
+        },
+    });
+
+    const barChart = new Chart(barCtx, {
+        type: 'bar',
+        data: createBarDataset(currentRange),
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { position: 'bottom' },
+                tooltip: {
+                    callbacks: {
+                        label: (context) => `${context.dataset.label}: ${context.formattedValue} h`,
                     },
                 },
             },
+            scales: { y: { beginAtZero: true } },
+        },
+    });
+
+    const updateRange = (rangeKey) => {
+        if (!trendData[rangeKey] || !trendData[rangeKey].labels.length) {
+            return;
+        }
+        currentRange = rangeKey;
+        const lineData = createLineDataset(rangeKey);
+        lineChart.data.labels = lineData.labels;
+        lineChart.data.datasets.forEach((dataset, idx) => {
+            dataset.data = lineData.datasets[idx].data;
         });
-    }
+
+        const barData = createBarDataset(rangeKey);
+        barChart.data.labels = barData.labels;
+        barChart.data.datasets.forEach((dataset, idx) => {
+            dataset.data = barData.datasets[idx].data;
+        });
+
+        lineChart.update();
+        barChart.update();
+    };
+
+    rangeButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+            rangeButtons.forEach((btn) => btn.classList.remove('active'));
+            button.classList.add('active');
+            updateRange(button.dataset.range);
+        });
+    });
 });
 </script>

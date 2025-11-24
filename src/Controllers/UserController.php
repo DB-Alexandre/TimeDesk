@@ -309,16 +309,17 @@ class UserController
         $totalEntries = $this->entryManager->count($userId);
         $totalWorkEntries = $this->getWorkEntriesCount($userId);
         $totalBreakEntries = $this->getBreakEntriesCount($userId);
+        $totalCourseEntries = $this->getCourseEntriesCount($userId);
         
         // Première et dernière entrée
         $firstEntry = $this->getFirstEntry($userId);
         $lastEntry = $this->getLastEntry($userId);
         
-        // Statistiques par mois (12 derniers mois)
+        // Statistiques par périodes
         $monthlyBreakdown = $this->getMonthlyBreakdown($userId);
-        
-        // Statistiques par semaine (12 dernières semaines)
         $weeklyBreakdown = $this->getWeeklyBreakdown($userId);
+        $dailyBreakdown = $this->getDailyBreakdown($userId);
+        $yearlyBreakdown = $this->getYearlyBreakdown($userId);
         
         // Moyennes
         $avgDaily = $this->statsCalculator->getDailyAverage(
@@ -354,10 +355,13 @@ class UserController
             'totalEntries' => $totalEntries,
             'totalWorkEntries' => $totalWorkEntries,
             'totalBreakEntries' => $totalBreakEntries,
+            'totalCourseEntries' => $totalCourseEntries,
             'firstEntry' => $firstEntry,
             'lastEntry' => $lastEntry,
             'monthlyBreakdown' => $monthlyBreakdown,
             'weeklyBreakdown' => $weeklyBreakdown,
+            'dailyBreakdown' => $dailyBreakdown,
+            'yearlyBreakdown' => $yearlyBreakdown,
             'avgDaily' => $avgDaily,
             'allTimeStats' => $allTimeStats,
             'recentEntries' => $recentEntries,
@@ -386,6 +390,18 @@ class UserController
     {
         $db = Database::getInstance();
         $stmt = $db->prepare('SELECT COUNT(*) as count FROM entries WHERE user_id = ? AND type = "break"');
+        $stmt->execute([$userId]);
+        $result = $stmt->fetch();
+        return (int)$result['count'];
+    }
+
+    /**
+     * Compte les entrées de cours
+     */
+    private function getCourseEntriesCount(int $userId): int
+    {
+        $db = Database::getInstance();
+        $stmt = $db->prepare('SELECT COUNT(*) as count FROM entries WHERE user_id = ? AND type = "course"');
         $stmt->execute([$userId]);
         $result = $stmt->fetch();
         return (int)$result['count'];
@@ -474,6 +490,67 @@ class UserController
             ];
         }
         
+        return $breakdown;
+    }
+
+    /**
+     * Récupère les statistiques journalières (14 derniers jours)
+     */
+    private function getDailyBreakdown(int $userId): array
+    {
+        $today = new DateTimeImmutable('today');
+        $breakdown = [];
+        $dailyTarget = (int)round((CONTRACT_WEEKLY_HOURS * 60) / 5);
+
+        for ($i = 13; $i >= 0; $i--) {
+            $date = $today->modify("-{$i} days");
+            $dateStr = $date->format('Y-m-d');
+            $stats = $this->statsCalculator->getStats($dateStr, $dateStr, $userId);
+
+            $breakdown[] = [
+                'date' => $dateStr,
+                'label' => $date->format('d/m'),
+                'work_minutes' => $stats['work_minutes'],
+                'break_minutes' => $stats['break_minutes'],
+                'net_minutes' => $stats['net_minutes'],
+                'target_minutes' => $dailyTarget,
+            ];
+        }
+
+        return $breakdown;
+    }
+
+    /**
+     * Récupère les statistiques annuelles (5 dernières années)
+     */
+    private function getYearlyBreakdown(int $userId): array
+    {
+        $today = new DateTimeImmutable('today');
+        $breakdown = [];
+        $yearlyTarget = (int)round(MONTHLY_TARGET_HOURS * 12 * 60);
+
+        for ($i = 4; $i >= 0; $i--) {
+            $yearDate = $today->modify("-{$i} years");
+            $year = (int)$yearDate->format('Y');
+            $yearStart = new DateTimeImmutable($year . '-01-01');
+            $yearEnd = new DateTimeImmutable($year . '-12-31');
+
+            $stats = $this->statsCalculator->getStats(
+                $yearStart->format('Y-m-d'),
+                $yearEnd->format('Y-m-d'),
+                $userId
+            );
+
+            $breakdown[] = [
+                'year' => $year,
+                'label' => (string)$year,
+                'work_minutes' => $stats['work_minutes'],
+                'break_minutes' => $stats['break_minutes'],
+                'net_minutes' => $stats['net_minutes'],
+                'target_minutes' => $yearlyTarget,
+            ];
+        }
+
         return $breakdown;
     }
 

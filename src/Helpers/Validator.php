@@ -37,7 +37,7 @@ class Validator
      */
     public static function type(string $type): bool
     {
-        return in_array($type, ['work', 'break'], true);
+        return in_array($type, ['work', 'break', 'course'], true);
     }
 
     /**

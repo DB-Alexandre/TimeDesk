@@ -18,8 +18,52 @@ define('VIEWS_PATH', ROOT_PATH . '/views');
 define('DATA_PATH', ROOT_PATH . '/data');
 define('LOGS_PATH', ROOT_PATH . '/logs');
 
+// Chargement des variables d'environnement
+require_once __DIR__ . '/env.php';
+app_load_env(ROOT_PATH . '/.env');
+
 // Base de données
-define('DB_FILE', DATA_PATH . '/timesheet.sqlite');
+define('DB_DRIVER', strtolower((string)env('DB_DRIVER', 'sqlite')));
+
+// SQLite
+define('DB_SQLITE_PATH', env('DB_SQLITE_PATH', DATA_PATH . '/timesheet.sqlite'));
+
+// MySQL
+define('DB_HOST', env('DB_HOST', '127.0.0.1'));
+define('DB_PORT', (int)env('DB_PORT', 3306));
+define('DB_DATABASE', env('DB_DATABASE', 'timedesk'));
+define('DB_USERNAME', env('DB_USERNAME', 'root'));
+define('DB_PASSWORD', env('DB_PASSWORD', ''));
+define('DB_CHARSET', env('DB_CHARSET', 'utf8mb4'));
+define('DB_COLLATION', env('DB_COLLATION', 'utf8mb4_unicode_ci'));
+
+// Compatibilité historique
+define('DB_FILE', DB_SQLITE_PATH);
+
+// Sécurité session & auth
+define('SESSION_TIMEOUT', (int)env('SESSION_TIMEOUT', 3600)); // 1h
+define('LOGIN_MAX_ATTEMPTS', (int)env('LOGIN_MAX_ATTEMPTS', 5));
+define('LOGIN_LOCK_WINDOW', (int)env('LOGIN_LOCK_WINDOW', 900)); // 15 min
+define('PASSWORD_MIN_LENGTH', (int)env('PASSWORD_MIN_LENGTH', 10));
+define('PASSWORD_REQUIRE_UPPERCASE', env_bool('PASSWORD_REQUIRE_UPPERCASE', true));
+define('PASSWORD_REQUIRE_LOWERCASE', env_bool('PASSWORD_REQUIRE_LOWERCASE', true));
+define('PASSWORD_REQUIRE_DIGIT', env_bool('PASSWORD_REQUIRE_DIGIT', true));
+define('PASSWORD_REQUIRE_SPECIAL', env_bool('PASSWORD_REQUIRE_SPECIAL', true));
+define('PASSWORD_RESET_EXPIRY', (int)env('PASSWORD_RESET_EXPIRY', 3600)); // 1h
+
+// Email
+define('MAIL_ENABLED', env_bool('MAIL_ENABLED', false));
+define('MAIL_FROM_ADDRESS', env('MAIL_FROM_ADDRESS', ''));
+define('MAIL_FROM_NAME', env('MAIL_FROM_NAME', 'TimeDesk'));
+
+// Logs & monitoring
+define('LOG_MAX_SIZE_MB', (int)env('LOG_MAX_SIZE_MB', 10));
+define('LOG_RETENTION_DAYS', (int)env('LOG_RETENTION_DAYS', 7));
+
+define('ALERT_ENABLED', env_bool('ALERT_ENABLED', false));
+define('ALERT_WEBHOOK_URL', env('ALERT_WEBHOOK_URL', ''));
+define('ALERT_WEBHOOK_METHOD', strtoupper(env('ALERT_WEBHOOK_METHOD', 'POST')));
+define('ALERT_EVENTS', env_array('ALERT_EVENTS', ['login_blocked', 'db_console_query', 'user_deleted']));
 
 // Configuration du temps de travail
 define('CONTRACT_WEEKLY_HOURS', 35.0);
