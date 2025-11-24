@@ -245,12 +245,17 @@ class EntryController
         }
 
         try {
+            $type = $_POST['type'] ?? 'work';
+            if (!in_array($type, ['work', 'break', 'course'], true)) {
+                $type = 'work';
+            }
+            
             $data = [
                 'user_id' => Auth::getUserId(),
                 'date' => Validator::clean($_POST['date'] ?? ''),
                 'start_time' => Validator::clean($_POST['start_time'] ?? ''),
                 'end_time' => Validator::clean($_POST['end_time'] ?? ''),
-                'type' => ($_POST['type'] ?? 'work') === 'break' ? 'break' : 'work',
+                'type' => $type,
                 'description' => Validator::clean($_POST['description'] ?? ''),
             ];
 
@@ -304,11 +309,16 @@ class EntryController
                 throw new Exception('Vous n\'avez pas la permission de modifier cette entrée');
             }
             
+            $type = $_POST['type'] ?? 'work';
+            if (!in_array($type, ['work', 'break', 'course'], true)) {
+                $type = 'work';
+            }
+            
             $data = [
                 'date' => Validator::clean($_POST['date'] ?? ''),
                 'start_time' => Validator::clean($_POST['start_time'] ?? ''),
                 'end_time' => Validator::clean($_POST['end_time'] ?? ''),
-                'type' => ($_POST['type'] ?? 'work') === 'break' ? 'break' : 'work',
+                'type' => $type,
                 'description' => Validator::clean($_POST['description'] ?? ''),
             ];
 
