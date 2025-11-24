@@ -16,6 +16,7 @@ use Controllers\EntryController;
 use Controllers\ApiController;
 use Controllers\AuthController;
 use Controllers\UserController;
+use Controllers\AdminController;
 use Helpers\Logger;
 
 // Démarrage de la session
@@ -35,6 +36,12 @@ try {
     if ($action === 'lastEnd') {
         $apiController = new ApiController();
         $apiController->lastEndTime();
+        exit;
+    }
+
+    if ($action === 'admin-db') {
+        $adminController = new AdminController();
+        $adminController->database();
         exit;
     }
 

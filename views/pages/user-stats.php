@@ -123,6 +123,28 @@ use Helpers\Auth;
             </div>
         </div>
 
+        <!-- Visualisations -->
+        <div class="row g-3 mb-4">
+            <div class="col-md-6">
+                <div class="card glass h-100">
+                    <div class="card-body">
+                        <h3 class="h5 mb-3">Tendance mensuelle</h3>
+                        <canvas id="monthlyTrendChart" height="220"></canvas>
+                        <small class="text-muted d-block mt-2">Net (heures) vs cible mensuelle</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card glass h-100">
+                    <div class="card-body">
+                        <h3 class="h5 mb-3">Tendance hebdomadaire</h3>
+                        <canvas id="weeklyTrendChart" height="220"></canvas>
+                        <small class="text-muted d-block mt-2">Net (heures) vs cible hebdomadaire</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Détails par mois -->
         <div class="row g-3 mb-4">
             <div class="col-12">
@@ -360,3 +382,107 @@ use Helpers\Auth;
     </div>
 </div>
 
+<?php
+$monthlyChartData = [
+    'labels' => array_map(static fn ($month) => $month['label'], $monthlyBreakdown),
+    'net' => array_map(static fn ($month) => round($month['net_minutes'] / 60, 2), $monthlyBreakdown),
+    'target' => array_map(static fn ($month) => round($month['target_minutes'] / 60, 2), $monthlyBreakdown),
+];
+
+$weeklyChartData = [
+    'labels' => array_map(static fn ($week) => $week['label'], $weeklyBreakdown),
+    'net' => array_map(static fn ($week) => round($week['net_minutes'] / 60, 2), $weeklyBreakdown),
+    'target' => array_map(static fn ($week) => round($week['target_minutes'] / 60, 2), $weeklyBreakdown),
+];
+?>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    if (!window.Chart) {
+        return;
+    }
+
+    const monthlyCtx = document.getElementById('monthlyTrendChart');
+    const weeklyCtx = document.getElementById('weeklyTrendChart');
+
+    const monthlyData = <?php echo json_encode($monthlyChartData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
+    const weeklyData = <?php echo json_encode($weeklyChartData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
+
+    if (monthlyCtx && monthlyData.labels.length) {
+        new Chart(monthlyCtx, {
+            type: 'line',
+            data: {
+                labels: monthlyData.labels,
+                datasets: [
+                    {
+                        label: 'Net (h)',
+                        data: monthlyData.net,
+                        borderColor: '#0d6efd',
+                        backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                        tension: 0.35,
+                        fill: true,
+                    },
+                    {
+                        label: 'Cible (h)',
+                        data: monthlyData.target,
+                        borderColor: '#6c757d',
+                        borderDash: [6, 6],
+                        tension: 0.35,
+                        fill: false,
+                    },
+                ],
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                    },
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                    },
+                },
+            },
+        });
+    }
+
+    if (weeklyCtx && weeklyData.labels.length) {
+        new Chart(weeklyCtx, {
+            type: 'bar',
+            data: {
+                labels: weeklyData.labels,
+                datasets: [
+                    {
+                        label: 'Net (h)',
+                        data: weeklyData.net,
+                        backgroundColor: '#20c997',
+                        borderRadius: 4,
+                    },
+                    {
+                        label: 'Cible (h)',
+                        data: weeklyData.target,
+                        backgroundColor: '#adb5bd',
+                        borderRadius: 4,
+                    },
+                ],
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                    },
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                    },
+                },
+            },
+        });
+    }
+});
+</script>

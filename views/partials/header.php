@@ -24,6 +24,9 @@ use Helpers\Auth;
                     <a href="?action=users" class="btn btn-sm btn-outline-primary">
                         👥 Utilisateurs
                     </a>
+                    <a href="?action=admin-db" class="btn btn-sm btn-outline-warning">
+                        🗄️ Base
+                    </a>
                 <?php endif; ?>
                 <button class="btn btn-sm btn-outline-secondary" id="toggleTheme" type="button">
                     🌙/☀️
