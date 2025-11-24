@@ -65,6 +65,14 @@ class Validator
     }
 
     /**
+     * Génère un champ hidden avec le token CSRF
+     */
+    public static function csrfField(): string
+    {
+        return '<input type="hidden" name="csrf" value="' . self::escape(self::csrfToken()) . '">';
+    }
+
+    /**
      * Échappe une chaîne HTML
      */
     public static function escape(?string $string): string

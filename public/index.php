@@ -17,6 +17,10 @@ use Controllers\ApiController;
 use Controllers\AuthController;
 use Controllers\UserController;
 use Controllers\AdminController;
+use Controllers\RestApiController;
+use Controllers\ImportController;
+use Controllers\ReportController;
+use Controllers\BackupController;
 use Helpers\Logger;
 
 // Démarrage de la session
@@ -66,6 +70,52 @@ try {
     if ($action === 'export-pdf') {
         $apiController = new ApiController();
         $apiController->exportPdf();
+        exit;
+    }
+
+    // API REST
+    if ($action === 'api' || str_starts_with($action, 'api/')) {
+        $restApi = new RestApiController();
+        $restApi->handle();
+        exit;
+    }
+
+    // Routes d'import
+    if ($action === 'import') {
+        $importController = new ImportController();
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $importController->process();
+        } else {
+            $importController->form();
+        }
+        exit;
+    }
+
+    // Routes de rapports personnalisables
+    if ($action === 'report-create') {
+        $reportController = new ReportController();
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $reportController->generate();
+        } else {
+            $reportController->createForm();
+        }
+        exit;
+    }
+
+    // Routes de backup
+    if (in_array($action, ['backup-list', 'backup-create', 'backup-download'])) {
+        $backupController = new BackupController();
+        switch ($action) {
+            case 'backup-list':
+                $backupController->list();
+                break;
+            case 'backup-create':
+                $backupController->create();
+                break;
+            case 'backup-download':
+                $backupController->download();
+                break;
+        }
         exit;
     }
 

@@ -1,0 +1,7 @@
+[24-Nov-2025 15:38:40 Europe/Paris] Call to undefined method Helpers\Validator::csrfField()
+[24-Nov-2025 15:38:40 Europe/Paris] PHP Warning:  Cannot modify header information - headers already sent by (output started at C:\laragon\www\TimeDesk\views\partials\header.php:55) in C:\laragon\www\TimeDesk\src\Core\Router.php on line 90
+[24-Nov-2025 15:38:45 Europe/Paris] Call to undefined method Helpers\Validator::csrfField()
+[24-Nov-2025 15:38:45 Europe/Paris] PHP Warning:  Cannot modify header information - headers already sent by (output started at C:\laragon\www\TimeDesk\views\partials\header.php:55) in C:\laragon\www\TimeDesk\src\Core\Router.php on line 90
+[24-Nov-2025 15:41:13 Europe/Paris] Class "ZipArchive" not found
+[24-Nov-2025 15:47:57 Europe/Paris] Helpers\PdfReport::drawText(): Argument #1 ($text) must be of type string, int given, called in C:\laragon\www\TimeDesk\src\Helpers\PdfReport.php on line 196
+[24-Nov-2025 15:57:15 Europe/Paris] Call to undefined method Helpers\PdfReport::addLine()
